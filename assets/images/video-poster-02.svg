@@ -1,0 +1,14 @@
+<svg width="1280" height="800" viewBox="0 0 1280 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="800" fill="#E5D8CF"/>
+  <rect width="1280" height="800" fill="url(#paint0_linear_11_2)"/>
+  <circle cx="335" cy="216" r="188" fill="#FFF8F2" fill-opacity="0.46"/>
+  <circle cx="930" cy="608" r="240" fill="#EEC6B1" fill-opacity="0.4"/>
+  <path d="M201 440C353 410 451 387 596 401C735 414 840 483 1085 537" stroke="#FFF8F2" stroke-width="3"/>
+  <text x="640" y="714" text-anchor="middle" fill="#56413A" fill-opacity="0.72" font-family="Arial, sans-serif" font-size="38" letter-spacing="4">VIDEO MEMORY 02</text>
+  <defs>
+    <linearGradient id="paint0_linear_11_2" x1="137" y1="76" x2="1160" y2="725" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8EFE7"/>
+      <stop offset="1" stop-color="#D0B6AA"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Love in Layers</title>
+    <meta
+      name="description"
+      content="参考唱片陈列视频重建的单页展厅网页，具有白色画廊界面、纵深唱片阵列与极简信息页面。"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="page-noise" aria-hidden="true"></div>
+
+      <header class="chrome chrome-top">
+        <div class="nav-group" data-top-nav></div>
+        <button
+          class="preview-tile"
+          type="button"
+          data-action="go-view"
+          data-view="overview"
+          aria-label="返回总览"
+        >
+          <img src="./网页参考/contact_detail_late.jpg" alt="" />
+        </button>
+      </header>
+
+      <main id="app" aria-live="polite"></main>
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

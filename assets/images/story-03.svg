@@ -1,0 +1,14 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" fill="#E8DED8"/>
+  <rect width="1200" height="900" fill="url(#paint0_linear_4_2)"/>
+  <circle cx="906" cy="262" r="170" fill="#FFF8F0" fill-opacity="0.45"/>
+  <circle cx="370" cy="598" r="292" fill="#F2C7B7" fill-opacity="0.42"/>
+  <path d="M198 677C310 568 395 492 491 455C609 409 758 435 967 299" stroke="#FFF9F2" stroke-width="3"/>
+  <text x="600" y="818" text-anchor="middle" fill="#624D45" fill-opacity="0.75" font-family="Arial, sans-serif" font-size="38" letter-spacing="4">WINTER HUG</text>
+  <defs>
+    <linearGradient id="paint0_linear_4_2" x1="111" y1="76" x2="1030" y2="823" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8F0EA"/>
+      <stop offset="1" stop-color="#D1B6AA"/>
+    </linearGradient>
+  </defs>
+</svg>
