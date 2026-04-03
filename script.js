@@ -301,6 +301,7 @@ const state = {
   activeWorkId: pageContent.works[0].id,
   galleryProgress: 0,
   hoveredWorkId: null,
+  interactionMode: "desktop",
 };
 
 const app = document.querySelector("#app");
@@ -308,6 +309,7 @@ const topNav = document.querySelector("[data-top-nav]");
 const previewTile = document.querySelector(".preview-tile img");
 let trackMotionCleanup = null;
 let overviewCleanup = null;
+const mobileMediaQuery = window.matchMedia("(max-width: 720px), (pointer: coarse)");
 
 if (previewTile) {
   previewTile.src = pageContent.site.previewThumb;
@@ -328,6 +330,14 @@ function getActiveWork() {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function isMobileInteractionMode() {
+  return state.interactionMode === "mobile";
+}
+
+function updateInteractionMode() {
+  state.interactionMode = mobileMediaQuery.matches ? "mobile" : "desktop";
 }
 
 function getContinuousLoopSlot(index, progress, total, lead = 4.15, trail = 8.8) {
@@ -704,6 +714,12 @@ function setupTrackMotion() {
     return;
   }
 
+  if (isMobileInteractionMode()) {
+    track.style.setProperty("--drift-x", "0px");
+    track.style.setProperty("--drift-y", "0px");
+    return;
+  }
+
   let frameId = 0;
 
   const handlePointerMove = (event) => {
@@ -744,22 +760,28 @@ function applyOverviewLayout() {
   const works = getFilteredWorks();
   const total = works.length;
   syncActiveWorkFromProgress();
-  const focusedWorkId = state.hoveredWorkId || state.activeWorkId;
+  const focusedWorkId = isMobileInteractionMode() ? state.activeWorkId : state.hoveredWorkId || state.activeWorkId;
+  const mobileMode = isMobileInteractionMode();
 
   cards.forEach((card) => {
     const index = Number(card.dataset.workIndex || 0);
-    const slot = getContinuousLoopSlot(index, state.galleryProgress, total);
+    const slot = getContinuousLoopSlot(index, state.galleryProgress, total, mobileMode ? 2.7 : 4.15, mobileMode ? 5.2 : 8.8);
     const isFocused = card.dataset.workId === focusedWorkId;
-    const left = 34.2 + slot * 7.2;
-    const top = 46.8 - slot * 4.7;
-    const depth = -slot * 138;
-    const peakSlot = 1.8;
+    const left = mobileMode ? 47.5 + slot * 12.2 : 34.2 + slot * 7.2;
+    const top = mobileMode ? 52.5 - slot * 6.9 : 46.8 - slot * 4.7;
+    const depth = mobileMode ? -slot * 92 : -slot * 138;
+    const peakSlot = mobileMode ? 0.1 : 1.8;
     const distanceFromPeak = Math.abs(slot - peakSlot);
-    const scale = 1.03 - distanceFromPeak * 0.03 - Math.max(slot - peakSlot, 0) * 0.008;
-    const baseOpacity = clamp(1 - Math.max(slot, 0) * 0.1 - Math.max(-slot, 0) * 0.04, 0, 1);
-    const fadeOutLeft = clamp((slot + 4.15) / 1.9, 0, 1);
-    const opacity = clamp((baseOpacity * fadeOutLeft) + Math.max(slot, 0) * 0.015, 0, 1);
-    const visibility = slot > -4.1 && slot < 8.75;
+    const scale = mobileMode
+      ? 1.09 - distanceFromPeak * 0.085 - Math.max(slot - peakSlot, 0) * 0.015
+      : 1.03 - distanceFromPeak * 0.03 - Math.max(slot - peakSlot, 0) * 0.008;
+    const baseOpacity = mobileMode
+      ? clamp(1 - Math.max(slot, 0) * 0.11 - Math.max(-slot, 0) * 0.075, 0, 1)
+      : clamp(1 - Math.max(slot, 0) * 0.1 - Math.max(-slot, 0) * 0.04, 0, 1);
+    const fadeOutLeft = mobileMode ? clamp((slot + 2.7) / 1.2, 0, 1) : clamp((slot + 4.15) / 1.9, 0, 1);
+    const fadeOutRight = mobileMode ? clamp((5.25 - slot) / 1.15, 0, 1) : 1;
+    const opacity = clamp(baseOpacity * fadeOutLeft * fadeOutRight + Math.max(slot, 0) * (mobileMode ? 0.008 : 0.015), 0, 1);
+    const visibility = mobileMode ? slot > -2.65 && slot < 5.25 : slot > -4.1 && slot < 8.75;
 
     card.style.setProperty("--slot", slot.toFixed(3));
     card.style.left = `${left}%`;
@@ -767,11 +789,49 @@ function applyOverviewLayout() {
     card.style.zIndex = String((isFocused ? 1800 : 1000) - Math.round(slot * 36));
     card.style.opacity = visibility ? opacity.toFixed(3) : "0";
     card.style.transform = isFocused
-      ? `translate3d(0, 0, ${depth + 18}px) scale(${(scale + 0.01).toFixed(3)})`
+      ? `translate3d(0, 0, ${depth + (mobileMode ? 14 : 18)}px) scale(${(scale + (mobileMode ? 0.025 : 0.01)).toFixed(3)})`
       : `translate3d(0, 0, ${depth}px) scale(${scale.toFixed(3)})`;
     card.style.pointerEvents = visibility ? "auto" : "none";
     card.classList.toggle("is-focused", isFocused);
   });
+}
+
+function findClosestCardAtPoint(clientX, clientY, cards) {
+  const hitStack = document.elementsFromPoint(clientX, clientY);
+  const directWorkId = hitStack
+    .find((element) => element instanceof HTMLElement && element.closest(".work-card"))
+    ?.closest(".work-card")
+    ?.dataset.workId;
+
+  if (directWorkId) {
+    return directWorkId;
+  }
+
+  let bestWorkId = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  cards.forEach((card) => {
+    if (!(card instanceof HTMLElement) || card.style.pointerEvents === "none" || card.style.opacity === "0") {
+      return;
+    }
+
+    const rect = card.getBoundingClientRect();
+    const inside = clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+    if (!inside) {
+      return;
+    }
+
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const score = Math.abs(clientX - centerX) + Math.abs(clientY - centerY) * 0.6;
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestWorkId = card.dataset.workId || null;
+    }
+  });
+
+  return bestWorkId;
 }
 
 function setupOverviewInteractions() {
@@ -782,7 +842,17 @@ function setupOverviewInteractions() {
     return;
   }
 
+  const mobileMode = isMobileInteractionMode();
+  let pointerId = null;
+  let startX = 0;
+  let startProgress = 0;
+  let moved = false;
+
   const handleWheel = (event) => {
+    if (mobileMode) {
+      return;
+    }
+
     if (state.view !== "overview") {
       return;
     }
@@ -799,6 +869,21 @@ function setupOverviewInteractions() {
   };
 
   const handlePointerMove = (event) => {
+    if (mobileMode) {
+      if (pointerId !== event.pointerId) {
+        return;
+      }
+
+      event.preventDefault();
+      const deltaX = event.clientX - startX;
+      if (Math.abs(deltaX) > 4) {
+        moved = true;
+      }
+      state.galleryProgress = startProgress - deltaX * 0.012;
+      applyOverviewLayout();
+      return;
+    }
+
     const hitStack = document.elementsFromPoint(event.clientX, event.clientY);
     const bestTarget = hitStack.find((element) => element instanceof HTMLElement && element.dataset.hoverWorkId);
     const bestWorkId = bestTarget?.dataset.hoverWorkId || null;
@@ -817,6 +902,10 @@ function setupOverviewInteractions() {
   };
 
   const handlePointerLeave = () => {
+    if (mobileMode) {
+      return;
+    }
+
     track.classList.remove("is-dimmed");
     state.hoveredWorkId = null;
     applyOverviewLayout();
@@ -825,9 +914,60 @@ function setupOverviewInteractions() {
     });
   };
 
+  const handlePointerDown = (event) => {
+    if (!mobileMode || event.pointerType === "mouse") {
+      return;
+    }
+
+    event.preventDefault();
+    pointerId = event.pointerId;
+    startX = event.clientX;
+    startProgress = state.galleryProgress;
+    moved = false;
+    track.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerUp = (event) => {
+    if (!mobileMode || pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    pointerId = null;
+    state.galleryProgress = Math.round(state.galleryProgress);
+    syncActiveWorkFromProgress();
+    applyOverviewLayout();
+
+    if (track.hasPointerCapture(event.pointerId)) {
+      track.releasePointerCapture(event.pointerId);
+    }
+  };
+
   const handleTrackClick = (event) => {
     const actionTarget = event.target.closest("[data-action]");
     if (actionTarget) {
+      return;
+    }
+
+    if (mobileMode) {
+      if (moved) {
+        return;
+      }
+
+      const workId = findClosestCardAtPoint(event.clientX, event.clientY, cards);
+      if (!workId) {
+        return;
+      }
+
+      if (state.activeWorkId !== workId) {
+        state.activeWorkId = workId;
+        syncGalleryProgressToActiveWork();
+        applyOverviewLayout();
+        return;
+      }
+
+      state.view = "detail";
+      renderApp();
       return;
     }
 
@@ -842,14 +982,28 @@ function setupOverviewInteractions() {
     renderApp();
   };
 
-  window.addEventListener("wheel", handleWheel, { passive: false });
-  track.addEventListener("pointermove", handlePointerMove);
-  track.addEventListener("pointerleave", handlePointerLeave);
+  if (!mobileMode) {
+    window.addEventListener("wheel", handleWheel, { passive: false });
+  }
+
+  if (mobileMode) {
+    track.addEventListener("pointerdown", handlePointerDown);
+    track.addEventListener("pointermove", handlePointerMove);
+    track.addEventListener("pointerup", handlePointerUp);
+    track.addEventListener("pointercancel", handlePointerUp);
+  } else {
+    track.addEventListener("pointermove", handlePointerMove);
+    track.addEventListener("pointerleave", handlePointerLeave);
+  }
+
   track.addEventListener("click", handleTrackClick);
 
   overviewCleanup = () => {
     window.removeEventListener("wheel", handleWheel);
+    track.removeEventListener("pointerdown", handlePointerDown);
     track.removeEventListener("pointermove", handlePointerMove);
+    track.removeEventListener("pointerup", handlePointerUp);
+    track.removeEventListener("pointercancel", handlePointerUp);
     track.removeEventListener("pointerleave", handlePointerLeave);
     track.removeEventListener("click", handleTrackClick);
   };
@@ -925,5 +1079,25 @@ document.addEventListener("keydown", (event) => {
     stepDetail(-1);
   }
 });
+
+const handleViewportChange = () => {
+  const previousMode = state.interactionMode;
+  updateInteractionMode();
+  if (previousMode !== state.interactionMode) {
+    state.hoveredWorkId = null;
+    renderApp();
+    return;
+  }
+
+  applyOverviewLayout();
+};
+
+updateInteractionMode();
+if (typeof mobileMediaQuery.addEventListener === "function") {
+  mobileMediaQuery.addEventListener("change", handleViewportChange);
+} else if (typeof mobileMediaQuery.addListener === "function") {
+  mobileMediaQuery.addListener(handleViewportChange);
+}
+window.addEventListener("resize", handleViewportChange);
 
 renderApp();
