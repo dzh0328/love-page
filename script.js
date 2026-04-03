@@ -337,7 +337,11 @@ function isMobileInteractionMode() {
 }
 
 function updateInteractionMode() {
-  state.interactionMode = mobileMediaQuery.matches ? "mobile" : "desktop";
+  const hasTouch =
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    navigator.msMaxTouchPoints > 0;
+  state.interactionMode = mobileMediaQuery.matches || hasTouch ? "mobile" : "desktop";
 }
 
 function getContinuousLoopSlot(index, progress, total, lead = 4.15, trail = 8.8) {
@@ -847,6 +851,8 @@ function setupOverviewInteractions() {
   let startX = 0;
   let startProgress = 0;
   let moved = false;
+  let touchActive = false;
+  let lastTouchActivationAt = 0;
 
   const handleWheel = (event) => {
     if (mobileMode) {
@@ -868,6 +874,44 @@ function setupOverviewInteractions() {
     applyOverviewLayout();
   };
 
+  const beginDrag = (clientX) => {
+    startX = clientX;
+    startProgress = state.galleryProgress;
+    moved = false;
+  };
+
+  const updateDrag = (clientX) => {
+    const deltaX = clientX - startX;
+    if (Math.abs(deltaX) > 4) {
+      moved = true;
+    }
+    state.galleryProgress = startProgress - deltaX * 0.012;
+    applyOverviewLayout();
+  };
+
+  const endDrag = () => {
+    state.galleryProgress = Math.round(state.galleryProgress);
+    syncActiveWorkFromProgress();
+    applyOverviewLayout();
+  };
+
+  const activateWorkAtPoint = (clientX, clientY) => {
+    const workId = findClosestCardAtPoint(clientX, clientY, cards);
+    if (!workId) {
+      return;
+    }
+
+    if (state.activeWorkId !== workId) {
+      state.activeWorkId = workId;
+      syncGalleryProgressToActiveWork();
+      applyOverviewLayout();
+      return;
+    }
+
+    state.view = "detail";
+    renderApp();
+  };
+
   const handlePointerMove = (event) => {
     if (mobileMode) {
       if (pointerId !== event.pointerId) {
@@ -875,12 +919,7 @@ function setupOverviewInteractions() {
       }
 
       event.preventDefault();
-      const deltaX = event.clientX - startX;
-      if (Math.abs(deltaX) > 4) {
-        moved = true;
-      }
-      state.galleryProgress = startProgress - deltaX * 0.012;
-      applyOverviewLayout();
+      updateDrag(event.clientX);
       return;
     }
 
@@ -921,9 +960,7 @@ function setupOverviewInteractions() {
 
     event.preventDefault();
     pointerId = event.pointerId;
-    startX = event.clientX;
-    startProgress = state.galleryProgress;
-    moved = false;
+    beginDrag(event.clientX);
     track.setPointerCapture(event.pointerId);
   };
 
@@ -934,12 +971,44 @@ function setupOverviewInteractions() {
 
     event.preventDefault();
     pointerId = null;
-    state.galleryProgress = Math.round(state.galleryProgress);
-    syncActiveWorkFromProgress();
-    applyOverviewLayout();
+    endDrag();
 
     if (track.hasPointerCapture(event.pointerId)) {
       track.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleTouchStart = (event) => {
+    if (!mobileMode || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchActive = true;
+    beginDrag(touch.clientX);
+  };
+
+  const handleTouchMove = (event) => {
+    if (!mobileMode || !touchActive || event.touches.length !== 1) {
+      return;
+    }
+
+    event.preventDefault();
+    updateDrag(event.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (event) => {
+    if (!mobileMode || !touchActive) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    touchActive = false;
+    endDrag();
+
+    if (!moved && touch) {
+      lastTouchActivationAt = Date.now();
+      activateWorkAtPoint(touch.clientX, touch.clientY);
     }
   };
 
@@ -950,24 +1019,15 @@ function setupOverviewInteractions() {
     }
 
     if (mobileMode) {
+      if (Date.now() - lastTouchActivationAt < 450) {
+        return;
+      }
+
       if (moved) {
         return;
       }
 
-      const workId = findClosestCardAtPoint(event.clientX, event.clientY, cards);
-      if (!workId) {
-        return;
-      }
-
-      if (state.activeWorkId !== workId) {
-        state.activeWorkId = workId;
-        syncGalleryProgressToActiveWork();
-        applyOverviewLayout();
-        return;
-      }
-
-      state.view = "detail";
-      renderApp();
+      activateWorkAtPoint(event.clientX, event.clientY);
       return;
     }
 
@@ -991,6 +1051,10 @@ function setupOverviewInteractions() {
     track.addEventListener("pointermove", handlePointerMove);
     track.addEventListener("pointerup", handlePointerUp);
     track.addEventListener("pointercancel", handlePointerUp);
+    track.addEventListener("touchstart", handleTouchStart, { passive: false });
+    track.addEventListener("touchmove", handleTouchMove, { passive: false });
+    track.addEventListener("touchend", handleTouchEnd, { passive: false });
+    track.addEventListener("touchcancel", handleTouchEnd, { passive: false });
   } else {
     track.addEventListener("pointermove", handlePointerMove);
     track.addEventListener("pointerleave", handlePointerLeave);
@@ -1004,6 +1068,10 @@ function setupOverviewInteractions() {
     track.removeEventListener("pointermove", handlePointerMove);
     track.removeEventListener("pointerup", handlePointerUp);
     track.removeEventListener("pointercancel", handlePointerUp);
+    track.removeEventListener("touchstart", handleTouchStart);
+    track.removeEventListener("touchmove", handleTouchMove);
+    track.removeEventListener("touchend", handleTouchEnd);
+    track.removeEventListener("touchcancel", handleTouchEnd);
     track.removeEventListener("pointerleave", handlePointerLeave);
     track.removeEventListener("click", handleTrackClick);
   };
